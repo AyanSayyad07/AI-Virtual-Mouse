@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import socketService from '../services/socketService';
+import { socket } from '../services/socketService';
 import { Save } from 'lucide-react';
 import './Settings.css';
 
 const Settings = () => {
   const [gestureMap, setGestureMap] = useState({
     thumbs_up: 'volumeup',
+    thumbs_down: 'volumedown',
     pinky_up: 'playpause',
     rock_sign: 'nexttrack'
   });
@@ -25,7 +26,7 @@ const Settings = () => {
 
   const handleSave = () => {
     localStorage.setItem('gestureRules', JSON.stringify(gestureMap));
-    socketService.socket.emit('update_gesture_rules', gestureMap);
+    socket.emit('update_gesture_rules', gestureMap);
     setSaveStatus('Saved successfully!');
     setTimeout(() => setSaveStatus(''), 2000);
   };
@@ -44,6 +45,23 @@ const Settings = () => {
           <select 
             value={gestureMap.thumbs_up} 
             onChange={(e) => handleChange('thumbs_up', e.target.value)}
+          >
+            <option value="none">None</option>
+            <option value="volumeup">Volume Up</option>
+            <option value="volumedown">Volume Down</option>
+            <option value="playpause">Play / Pause</option>
+            <option value="nexttrack">Next Track</option>
+          </select>
+        </div>
+
+        <div className="setting-card">
+          <div className="setting-header">
+            <h3>👎 Thumbs Down</h3>
+            <p>Thumb extended downwards</p>
+          </div>
+          <select 
+            value={gestureMap.thumbs_down} 
+            onChange={(e) => handleChange('thumbs_down', e.target.value)}
           >
             <option value="none">None</option>
             <option value="volumeup">Volume Up</option>

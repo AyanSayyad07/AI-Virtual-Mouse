@@ -18,6 +18,7 @@ is_dragging = False
 
 custom_rules = {
     'thumbs_up': 'volumeup',
+    'thumbs_down': 'volumedown',
     'pinky_up': 'playpause',
     'rock_sign': 'nexttrack'
 }
@@ -143,6 +144,7 @@ def main():
                         
                         # Custom Gestures
                         is_thumbs_up = is_thumb_up and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up
+                        is_thumbs_down = (thumb_tip.y > lmList[2].y) and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and not is_thumb_up
                         is_pinky_only_up = is_pinky_up and not is_index_up and not is_middle_up and not is_ring_up and not is_thumb_up
                         is_rock_sign = is_index_up and is_pinky_up and not is_middle_up and not is_ring_up and not is_thumb_up
 
@@ -160,6 +162,7 @@ def main():
                                         pass
 
                         if is_thumbs_up: execute_custom_action('thumbs_up')
+                        if is_thumbs_down: execute_custom_action('thumbs_down')
                         if is_pinky_only_up: execute_custom_action('pinky_up')
                         if is_rock_sign: execute_custom_action('rock_sign')
                         
