@@ -198,9 +198,9 @@ def main():
                             cv2.rectangle(img, (frameR, frameR), (w - frameR, h - frameR), (255, 0, 255), 2)
                             
                             # Movement tracks the Index Finger Tip
-                            # Freeze movement while clicking (Stabilizer: pinch_ratio < 0.6)
+                            # Freeze movement while clicking (Stabilizer: pinch_ratio < 0.45)
                             is_movement_mode = (is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up) or is_dragging
-                            if is_movement_mode and pinch_ratio >= 0.6:
+                            if is_movement_mode and pinch_ratio >= 0.45:
                                 x3 = np.interp(index_tip.x * w, [frameR, w - frameR], [0, screen_w])
                                 y3 = np.interp(index_tip.y * h, [frameR, h - frameR], [0, screen_h])
                                 clocX = plocX + (x3 - plocX) / smoothening
@@ -210,7 +210,7 @@ def main():
                                     except Exception: pass
                                     plocX, plocY = clocX, clocY
 
-                            if is_pinching:
+                            if pinch_ratio < 0.25:
                                 simulated_gestures.append("pinch")
                                 if not was_pinched:
                                     try:
@@ -220,7 +220,7 @@ def main():
                             else:
                                 was_pinched = False
                                         
-                            if right_pinch_ratio < 0.4 and not is_pinching:
+                            if right_pinch_ratio < 0.25 and pinch_ratio >= 0.25:
                                 simulated_gestures.append("pinch")
                                 if time.time() - last_right_click_time > 0.5:
                                     try:
@@ -233,7 +233,7 @@ def main():
                                 try: pyautogui.scroll(50)
                                 except: pass
                                 
-                            if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                            if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and pinch_ratio >= 0.45:
                                 simulated_gestures.append("drag")
                                 if not is_dragging:
                                     try:
