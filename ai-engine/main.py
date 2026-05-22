@@ -1,0 +1,189 @@
+import cv2
+import base64
+import time
+import math
+import socketio
+import numpy as np
+import mediapipe as mp
+import pyautogui
+
+pyautogui.FAILSAFE = False # Disable for VM environments, enable for real use
+screen_w, screen_h = pyautogui.size()
+smoothening = 5
+plocX, plocY = 0, 0
+clocX, clocY = 0, 0
+last_click_time = 0
+
+# MediaPipe setup
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=1,
+    min_detection_confidence=0.7,
+    min_tracking_confidence=0.5
+)
+mp_drawing = mp.solutions.drawing_utils
+
+# Initialize Socket.io client
+sio = socketio.Client()
+
+@sio.event
+def connect():
+    print("Connected to Node.js backend!")
+
+@sio.event
+def disconnect():
+    print("Disconnected from backend.")
+
+def get_distance(p1, p2, img_w, img_h):
+    x1, y1 = int(p1.x * img_w), int(p1.y * img_h)
+    x2, y2 = int(p2.x * img_w), int(p2.y * img_h)
+    return math.hypot(x2 - x1, y2 - y1)
+
+def main():
+    try:
+        sio.connect('http://localhost:5000')
+    except Exception as e:
+        print(f"Failed to connect to backend: {e}")
+        return
+
+    # Initialize Webcam
+    cap = cv2.VideoCapture(0)
+    use_synthetic = False
+    
+    if not cap.isOpened():
+        print("Warning: Could not open webcam. Using synthetic video stream instead.")
+        use_synthetic = True
+
+    start_time = time.time()
+
+    try:
+        while True:
+            if use_synthetic:
+                # Generate synthetic stream (a moving circle)
+                img = np.zeros((480, 640, 3), dtype=np.uint8)
+                t = time.time()
+                cx = int(320 + math.sin(t * 2) * 150)
+                cy = int(240 + math.cos(t * 2) * 100)
+                cv2.circle(img, (cx, cy), 50, (235, 99, 37), -1) # Blueish orange
+                cv2.putText(img, "SYNTHETIC AI STREAM", (180, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                simulated_gestures = [] # No hand in synthetic stream
+            else:
+                success, img = cap.read()
+                if not success:
+                    print("Warning: Dropped frame or webcam failed. Switching to synthetic stream.")
+                    use_synthetic = True
+                    continue
+                
+                # Flip image for selfie view
+                img = cv2.flip(img, 1)
+                h, w, c = img.shape
+                
+                # Convert to RGB for MediaPipe
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                results = hands.process(img_rgb)
+                
+                simulated_gestures = []
+                
+                if results.multi_hand_landmarks:
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        # Draw landmarks on frame
+                        mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                        
+                        lmList = hand_landmarks.landmark
+                        
+                        # Finger tips
+                        thumb_tip = lmList[4]
+                        index_tip = lmList[8]
+                        middle_tip = lmList[12]
+                        ring_tip = lmList[16]
+                        pinky_tip = lmList[20]
+                        
+                        # PIP joints (knuckles) to check if finger is extended
+                        index_pip = lmList[6]
+                        middle_pip = lmList[10]
+                        ring_pip = lmList[14]
+                        pinky_pip = lmList[18]
+                        
+                        # Distance between thumb and index
+                        pinch_dist = get_distance(thumb_tip, index_tip, w, h)
+                        
+                        # A finger is considered "up" if its tip is physically higher (lower y value) than its PIP joint
+                        is_index_up = index_tip.y < index_pip.y
+                        is_middle_up = middle_tip.y < middle_pip.y
+                        is_ring_up = ring_tip.y < ring_pip.y
+                        is_pinky_up = pinky_tip.y < pinky_pip.y
+                        
+                        # Movement -> Only Index Finger Up
+                        if is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                            # Interpolate coordinates to screen size
+                            x3 = np.interp(index_tip.x, [0, 1], [0, screen_w])
+                            y3 = np.interp(index_tip.y, [0, 1], [0, screen_h])
+                            
+                            # Smoothening
+                            global plocX, plocY, clocX, clocY
+                            clocX = plocX + (x3 - plocX) / smoothening
+                            clocY = plocY + (y3 - plocY) / smoothening
+                            
+                            # Move Mouse
+                            try:
+                                pyautogui.moveTo(screen_w - clocX, clocY)
+                            except Exception as e:
+                                print(f"Mouse move error: {e}")
+                                
+                            plocX, plocY = clocX, clocY
+
+                        # Left Click -> Pinch (Thumb and Index close)
+                        if pinch_dist < 40:
+                            simulated_gestures.append("pinch")
+                            global last_click_time
+                            if time.time() - last_click_time > 0.5:
+                                try:
+                                    pyautogui.click()
+                                    last_click_time = time.time()
+                                except Exception as e:
+                                    print(f"Mouse click error: {e}")
+                            
+                        # Scroll -> Two Fingers Up (Index & Middle)
+                        if is_index_up and is_middle_up and not is_ring_up and not is_pinky_up:
+                            simulated_gestures.append("swipe")
+                            try:
+                                pyautogui.scroll(50)
+                            except:
+                                pass
+                            
+                        # Drag & Drop -> Closed Fist (All fingers down)
+                        if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                            simulated_gestures.append("drag")
+                            
+                        # Virtual Keyboard -> Three Fingers Up
+                        if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
+                            simulated_gestures.append("keyboard")
+
+            # Compress image to JPEG to send over websocket
+            img_small = cv2.resize(img, (640, 480))
+            _, buffer = cv2.imencode('.jpg', img_small, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            frame_base64 = base64.b64encode(buffer).decode('utf-8')
+
+            # Prepare data payload
+            payload = {
+                'frame': f"data:image/jpeg;base64,{frame_base64}",
+                'gestures': simulated_gestures,
+                'latency': f"{int((time.time() - start_time) * 1000 % 30)}ms", # simulated latency
+            }
+
+            # Emit to backend
+            sio.emit('ai_data_stream', payload)
+
+            # Cap frame rate slightly to avoid overwhelming the socket (approx 30fps)
+            time.sleep(0.03)
+
+    except KeyboardInterrupt:
+        print("Stopping AI engine...")
+    finally:
+        if not use_synthetic:
+            cap.release()
+        sio.disconnect()
+
+if __name__ == '__main__':
+    main()
