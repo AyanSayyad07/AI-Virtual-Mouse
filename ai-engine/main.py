@@ -16,10 +16,9 @@ last_click_time = 0
 last_right_click_time = 0
 is_dragging = False
 was_pinched = False
-is_pinching_started = False
-pinch_start_time = 0
 prev_two_hand_dist = 0
 camera_active = True
+frameR = 100 # Bounding box reduction
 
 custom_rules = {
     'thumbs_up': 'volumeup',
@@ -138,7 +137,7 @@ def main():
                         simulated_gestures.append("two_hands")
                         
                     for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
-                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched, is_pinching_started, pinch_start_time
+                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched, frameR
                         # Draw landmarks on frame
                         mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                         lmList = hand_landmarks.landmark
@@ -195,12 +194,15 @@ def main():
                             if is_pinky_only_up: execute_custom_action('pinky_up')
                             if is_rock_sign: execute_custom_action('rock_sign')
                             
-                            # Movement tracks the Palm Center (middle_mcp) instead of index_tip
-                            # Movement mode is active as long as hand is not a perfectly closed fist
-                            is_movement_mode = not (not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up)
-                            if is_movement_mode:
-                                x3 = np.interp(middle_mcp.x, [0, 1], [0, screen_w])
-                                y3 = np.interp(middle_mcp.y, [0, 1], [0, screen_h])
+                            # Active Bounding Box to reach edges of screen easily
+                            cv2.rectangle(img, (frameR, frameR), (w - frameR, h - frameR), (255, 0, 255), 2)
+                            
+                            # Movement tracks the Index Finger Tip
+                            # Freeze movement while clicking (Stabilizer: pinch_ratio < 0.6)
+                            is_movement_mode = (is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up) or is_dragging
+                            if is_movement_mode and pinch_ratio >= 0.6:
+                                x3 = np.interp(index_tip.x * w, [frameR, w - frameR], [0, screen_w])
+                                y3 = np.interp(index_tip.y * h, [frameR, h - frameR], [0, screen_h])
                                 clocX = plocX + (x3 - plocX) / smoothening
                                 clocY = plocY + (y3 - plocY) / smoothening
                                 if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
@@ -208,34 +210,15 @@ def main():
                                     except Exception: pass
                                     plocX, plocY = clocX, clocY
 
-                            # Vision Pro Timer Logic for Pinch
                             if is_pinching:
                                 simulated_gestures.append("pinch")
-                                if not is_pinching_started:
-                                    is_pinching_started = True
-                                    pinch_start_time = time.time()
-                                else:
-                                    if time.time() - pinch_start_time > 0.3 and not is_dragging:
-                                        simulated_gestures.append("drag")
-                                        try:
-                                            pyautogui.mouseDown()
-                                            is_dragging = True
-                                        except Exception: pass
-                                if is_dragging:
-                                    simulated_gestures.append("drag")
+                                if not was_pinched:
+                                    try:
+                                        pyautogui.click()
+                                        was_pinched = True
+                                    except Exception: pass
                             else:
-                                if is_pinching_started:
-                                    # If released under 0.3s, it's a click
-                                    if time.time() - pinch_start_time <= 0.3:
-                                        try: pyautogui.click()
-                                        except Exception: pass
-                                    # If was dragging, release the drag
-                                    if is_dragging:
-                                        try:
-                                            pyautogui.mouseUp()
-                                            is_dragging = False
-                                        except Exception: pass
-                                    is_pinching_started = False
+                                was_pinched = False
                                         
                             if right_pinch_ratio < 0.4 and not is_pinching:
                                 simulated_gestures.append("pinch")
@@ -250,6 +233,19 @@ def main():
                                 try: pyautogui.scroll(50)
                                 except: pass
                                 
+                            if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                                simulated_gestures.append("drag")
+                                if not is_dragging:
+                                    try:
+                                        pyautogui.mouseDown()
+                                        is_dragging = True
+                                    except Exception: pass
+                            else:
+                                if is_dragging:
+                                    try:
+                                        pyautogui.mouseUp()
+                                        is_dragging = False
+                                    except Exception: pass
                                 
                             if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
                                 simulated_gestures.append("keyboard")
