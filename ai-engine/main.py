@@ -15,6 +15,7 @@ clocX, clocY = 0, 0
 last_click_time = 0
 last_right_click_time = 0
 is_dragging = False
+prev_two_hand_dist = 0
 
 custom_rules = {
     'thumbs_up': 'volumeup',
@@ -28,7 +29,7 @@ last_action_time = {}
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False,
-    max_num_hands=1,
+    max_num_hands=2,
     min_detection_confidence=0.7,
     min_tracking_confidence=0.5
 )
@@ -102,142 +103,142 @@ def main():
                 simulated_gestures = []
                 
                 if results.multi_hand_landmarks:
-                    for hand_landmarks in results.multi_hand_landmarks:
+                    hands_data = []
+                    
+                    if len(results.multi_hand_landmarks) == 2:
+                        simulated_gestures.append("two_hands")
+                        
+                    for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
                         # Draw landmarks on frame
                         mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-                        
                         lmList = hand_landmarks.landmark
                         
-                        # Finger tips
-                        thumb_tip = lmList[4]
-                        index_tip = lmList[8]
-                        middle_tip = lmList[12]
-                        ring_tip = lmList[16]
-                        pinky_tip = lmList[20]
+                        thumb_tip, index_tip, middle_tip = lmList[4], lmList[8], lmList[12]
+                        ring_tip, pinky_tip = lmList[16], lmList[20]
+                        index_pip, middle_pip = lmList[6], lmList[10]
+                        ring_pip, pinky_pip = lmList[14], lmList[18]
+                        wrist, middle_mcp = lmList[0], lmList[9]
                         
-                        # PIP joints (knuckles) to check if finger is extended
-                        index_pip = lmList[6]
-                        middle_pip = lmList[10]
-                        ring_pip = lmList[14]
-                        pinky_pip = lmList[18]
-                        
-                        # Dynamic Depth Scaling: Calculate hand size (wrist to middle MCP)
-                        wrist = lmList[0]
-                        middle_mcp = lmList[9]
                         hand_size = get_distance(wrist, middle_mcp, w, h)
-                        if hand_size == 0: hand_size = 1 # Prevent division by zero
+                        if hand_size == 0: hand_size = 1
                         
-                        # Distance between thumb and fingers
                         pinch_dist = get_distance(thumb_tip, index_tip, w, h)
                         right_pinch_dist = get_distance(thumb_tip, middle_tip, w, h)
-                        
-                        # Calculate Pinch Ratios (distance relative to hand size)
                         pinch_ratio = pinch_dist / hand_size
                         right_pinch_ratio = right_pinch_dist / hand_size
                         
-                        # A finger is considered "up" if its tip is physically higher (lower y value) than its PIP joint
                         is_index_up = index_tip.y < index_pip.y
                         is_middle_up = middle_tip.y < middle_pip.y
                         is_ring_up = ring_tip.y < ring_pip.y
                         is_pinky_up = pinky_tip.y < pinky_pip.y
                         is_thumb_up = thumb_tip.y < lmList[3].y
                         
-                        # Custom Gestures
-                        is_thumbs_up = is_thumb_up and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up
-                        is_thumbs_down = (thumb_tip.y > lmList[2].y) and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and not is_thumb_up
-                        is_pinky_only_up = is_pinky_up and not is_index_up and not is_middle_up and not is_ring_up and not is_thumb_up
-                        is_rock_sign = is_index_up and is_pinky_up and not is_middle_up and not is_ring_up and not is_thumb_up
-
-                        def execute_custom_action(gesture_name):
-                            global last_action_time, custom_rules
-                            action = custom_rules.get(gesture_name, 'none')
-                            if action != 'none':
-                                t = time.time()
-                                if t - last_action_time.get(action, 0) > 1.0: # 1 sec cooldown
-                                    try:
-                                        pyautogui.press(action)
-                                        last_action_time[action] = t
-                                        simulated_gestures.append(gesture_name)
-                                    except Exception:
-                                        pass
-
-                        if is_thumbs_up: execute_custom_action('thumbs_up')
-                        if is_thumbs_down: execute_custom_action('thumbs_down')
-                        if is_pinky_only_up: execute_custom_action('pinky_up')
-                        if is_rock_sign: execute_custom_action('rock_sign')
+                        is_pinching = pinch_ratio < 0.4
                         
-                        # Movement -> Only Index Finger Up
-                        if is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
-                            # Interpolate coordinates to screen size
-                            x3 = np.interp(index_tip.x, [0, 1], [0, screen_w])
-                            y3 = np.interp(index_tip.y, [0, 1], [0, screen_h])
-                            
-                            # Smoothening
-                            global plocX, plocY, clocX, clocY
-                            clocX = plocX + (x3 - plocX) / smoothening
-                            clocY = plocY + (y3 - plocY) / smoothening
-                            
-                            # Anti-Jitter Deadzone
-                            if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
-                                # Move Mouse
-                                try:
-                                    pyautogui.moveTo(screen_w - clocX, clocY)
-                                except Exception as e:
-                                    pass
-                                plocX, plocY = clocX, clocY
+                        hands_data.append({
+                            'is_pinching': is_pinching,
+                            'index_tip': index_tip,
+                        })
+                        
+                        # Only Hand 0 controls the cursor to prevent jumping
+                        if hand_idx == 0:
+                            is_thumbs_up = is_thumb_up and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up
+                            is_thumbs_down = (thumb_tip.y > lmList[2].y) and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and not is_thumb_up
+                            is_pinky_only_up = is_pinky_up and not is_index_up and not is_middle_up and not is_ring_up and not is_thumb_up
+                            is_rock_sign = is_index_up and is_pinky_up and not is_middle_up and not is_ring_up and not is_thumb_up
 
-                        # Left Click -> Pinch (Thumb and Index close)
-                        if pinch_ratio < 0.4:
-                            simulated_gestures.append("pinch")
-                            global last_click_time
-                            if time.time() - last_click_time > 0.5:
-                                try:
-                                    pyautogui.click()
-                                    last_click_time = time.time()
-                                except Exception as e:
-                                    pass
-                                    
-                        # Right Click -> Pinch (Thumb and Middle close)
-                        if right_pinch_ratio < 0.4 and not (pinch_ratio < 0.4):
-                            simulated_gestures.append("pinch") # UI doesn't have right click icon yet
-                            global last_right_click_time
-                            if time.time() - last_right_click_time > 0.5:
-                                try:
-                                    pyautogui.click(button='right')
-                                    last_right_click_time = time.time()
-                                except Exception as e:
-                                    pass
+                            def execute_custom_action(gesture_name):
+                                global last_action_time, custom_rules
+                                action = custom_rules.get(gesture_name, 'none')
+                                if action != 'none':
+                                    t = time.time()
+                                    if t - last_action_time.get(action, 0) > 1.0: 
+                                        try:
+                                            pyautogui.press(action)
+                                            last_action_time[action] = t
+                                            simulated_gestures.append(gesture_name)
+                                        except Exception:
+                                            pass
+
+                            if is_thumbs_up: execute_custom_action('thumbs_up')
+                            if is_thumbs_down: execute_custom_action('thumbs_down')
+                            if is_pinky_only_up: execute_custom_action('pinky_up')
+                            if is_rock_sign: execute_custom_action('rock_sign')
                             
-                        # Scroll -> Two Fingers Up (Index & Middle)
-                        if is_index_up and is_middle_up and not is_ring_up and not is_pinky_up:
-                            simulated_gestures.append("swipe")
-                            try:
-                                pyautogui.scroll(50)
-                            except:
-                                pass
-                            
-                        # Drag & Drop -> Closed Fist (All fingers down)
-                        global is_dragging
-                        if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
-                            simulated_gestures.append("drag")
-                            if not is_dragging:
-                                try:
-                                    pyautogui.mouseDown()
-                                    is_dragging = True
-                                except Exception:
-                                    pass
+                            if is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                                x3 = np.interp(index_tip.x, [0, 1], [0, screen_w])
+                                y3 = np.interp(index_tip.y, [0, 1], [0, screen_h])
+                                global plocX, plocY, clocX, clocY
+                                clocX = plocX + (x3 - plocX) / smoothening
+                                clocY = plocY + (y3 - plocY) / smoothening
+                                if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
+                                    try: pyautogui.moveTo(screen_w - clocX, clocY)
+                                    except Exception: pass
+                                    plocX, plocY = clocX, clocY
+
+                            if is_pinching:
+                                simulated_gestures.append("pinch")
+                                global last_click_time
+                                if time.time() - last_click_time > 0.5:
+                                    try:
+                                        pyautogui.click()
+                                        last_click_time = time.time()
+                                    except Exception: pass
+                                        
+                            if right_pinch_ratio < 0.4 and not is_pinching:
+                                simulated_gestures.append("pinch")
+                                global last_right_click_time
+                                if time.time() - last_right_click_time > 0.5:
+                                    try:
+                                        pyautogui.click(button='right')
+                                        last_right_click_time = time.time()
+                                    except Exception: pass
+                                
+                            if is_index_up and is_middle_up and not is_ring_up and not is_pinky_up:
+                                simulated_gestures.append("swipe")
+                                try: pyautogui.scroll(50)
+                                except: pass
+                                
+                            global is_dragging
+                            if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                                simulated_gestures.append("drag")
+                                if not is_dragging:
+                                    try:
+                                        pyautogui.mouseDown()
+                                        is_dragging = True
+                                    except Exception: pass
+                            else:
+                                if is_dragging:
+                                    try:
+                                        pyautogui.mouseUp()
+                                        is_dragging = False
+                                    except Exception: pass
+                                
+                            if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
+                                simulated_gestures.append("keyboard")
+
+                    # Two-Hand Zoom Logic
+                    global prev_two_hand_dist
+                    if len(hands_data) == 2:
+                        h1, h2 = hands_data[0], hands_data[1]
+                        if h1['is_pinching'] and h2['is_pinching']:
+                            current_dist = get_distance(h1['index_tip'], h2['index_tip'], w, h)
+                            if prev_two_hand_dist != 0:
+                                diff = current_dist - prev_two_hand_dist
+                                if diff > 15: # Hands pulling apart -> Zoom In
+                                    try: pyautogui.hotkey('ctrl', '+')
+                                    except: pass
+                                    prev_two_hand_dist = current_dist
+                                elif diff < -15: # Hands pushing together -> Zoom Out
+                                    try: pyautogui.hotkey('ctrl', '-')
+                                    except: pass
+                                    prev_two_hand_dist = current_dist
+                            else:
+                                prev_two_hand_dist = current_dist
                         else:
-                            # If hand opens, release the drag
-                            if is_dragging:
-                                try:
-                                    pyautogui.mouseUp()
-                                    is_dragging = False
-                                except Exception:
-                                    pass
-                            
-                        # Virtual Keyboard -> Three Fingers Up
-                        if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
-                            simulated_gestures.append("keyboard")
+                            prev_two_hand_dist = 0
+                    else:
+                        prev_two_hand_dist = 0
 
             # Compress image to JPEG to send over websocket
             img_small = cv2.resize(img, (640, 480))
