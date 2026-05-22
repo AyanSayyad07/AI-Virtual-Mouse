@@ -19,6 +19,7 @@ was_pinched = False
 is_pinching_started = False
 pinch_start_time = 0
 prev_two_hand_dist = 0
+camera_active = True
 
 custom_rules = {
     'thumbs_up': 'volumeup',
@@ -55,6 +56,12 @@ def new_gesture_rules(data):
     print("Received new custom rules:", data)
     custom_rules = data
 
+@sio.event
+def toggle_camera_engine(state):
+    global camera_active
+    print("Camera toggle received:", state)
+    camera_active = state
+
 def get_distance(p1, p2, img_w, img_h):
     x1, y1 = int(p1.x * img_w), int(p1.y * img_h)
     x2, y2 = int(p2.x * img_w), int(p2.y * img_h)
@@ -79,6 +86,25 @@ def main():
 
     try:
         while True:
+            global camera_active
+            if not camera_active:
+                if cap is not None and cap.isOpened():
+                    cap.release()
+                    cap = None
+                time.sleep(0.5)
+                # Emit empty payload to clear UI
+                sio.emit('ai_data_stream', {
+                    'frame': None,
+                    'gestures': [],
+                    'latency': '0ms'
+                })
+                continue
+                
+            if cap is None:
+                cap = cv2.VideoCapture(0)
+                if not cap.isOpened():
+                    use_synthetic = True
+
             if use_synthetic:
                 # Generate synthetic stream (a moving circle)
                 img = np.zeros((480, 640, 3), dtype=np.uint8)

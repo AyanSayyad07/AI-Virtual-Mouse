@@ -13,6 +13,12 @@ function setupSockets(io) {
       socket.broadcast.emit('new_gesture_rules', rules);
     });
 
+    // Toggle Camera permission
+    socket.on('toggle_camera', (state) => {
+      console.log('Toggling camera state:', state);
+      socket.broadcast.emit('toggle_camera_engine', state);
+    });
+
     socket.on('disconnect', () => {
       console.log(`Client disconnected: ${socket.id}`);
     });

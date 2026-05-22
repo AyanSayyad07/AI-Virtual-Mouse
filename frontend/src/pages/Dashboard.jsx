@@ -11,6 +11,13 @@ const Dashboard = () => {
     gestures: [],
     latency: '0ms'
   });
+  const [cameraActive, setCameraActive] = useState(true);
+
+  const toggleCamera = () => {
+    const newState = !cameraActive;
+    setCameraActive(newState);
+    socket.emit('toggle_camera', newState);
+  };
 
   useEffect(() => {
     connectSocket();
@@ -45,8 +52,12 @@ const Dashboard = () => {
           <p className="text-muted">Real-time system overview and model analytics.</p>
         </div>
         <div className="header-actions">
-          <button className="primary-btn">
-            Configure Model
+          <button 
+            className={`primary-btn ${!cameraActive ? 'danger' : ''}`}
+            onClick={toggleCamera}
+            style={{ backgroundColor: !cameraActive ? '#ef4444' : '' }}
+          >
+            {cameraActive ? 'Turn Camera Off' : 'Turn Camera On'}
           </button>
         </div>
       </div>
