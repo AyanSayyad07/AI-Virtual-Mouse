@@ -15,6 +15,7 @@ clocX, clocY = 0, 0
 last_click_time = 0
 last_right_click_time = 0
 is_dragging = False
+was_pinched = False
 prev_two_hand_dist = 0
 
 custom_rules = {
@@ -109,6 +110,7 @@ def main():
                         simulated_gestures.append("two_hands")
                         
                     for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
+                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched
                         # Draw landmarks on frame
                         mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                         lmList = hand_landmarks.landmark
@@ -165,10 +167,11 @@ def main():
                             if is_pinky_only_up: execute_custom_action('pinky_up')
                             if is_rock_sign: execute_custom_action('rock_sign')
                             
-                            if is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
+                            # Freeze movement while clicking to prevent jitter
+                            is_movement_mode = (is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up) or is_dragging
+                            if is_movement_mode and not is_pinching:
                                 x3 = np.interp(index_tip.x, [0, 1], [0, screen_w])
                                 y3 = np.interp(index_tip.y, [0, 1], [0, screen_h])
-                                global plocX, plocY, clocX, clocY
                                 clocX = plocX + (x3 - plocX) / smoothening
                                 clocY = plocY + (y3 - plocY) / smoothening
                                 if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
@@ -178,16 +181,16 @@ def main():
 
                             if is_pinching:
                                 simulated_gestures.append("pinch")
-                                global last_click_time
-                                if time.time() - last_click_time > 0.5:
+                                if not was_pinched:
                                     try:
                                         pyautogui.click()
-                                        last_click_time = time.time()
+                                        was_pinched = True
                                     except Exception: pass
+                            else:
+                                was_pinched = False
                                         
                             if right_pinch_ratio < 0.4 and not is_pinching:
                                 simulated_gestures.append("pinch")
-                                global last_right_click_time
                                 if time.time() - last_right_click_time > 0.5:
                                     try:
                                         pyautogui.click(button='right')
@@ -199,7 +202,6 @@ def main():
                                 try: pyautogui.scroll(50)
                                 except: pass
                                 
-                            global is_dragging
                             if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
                                 simulated_gestures.append("drag")
                                 if not is_dragging:

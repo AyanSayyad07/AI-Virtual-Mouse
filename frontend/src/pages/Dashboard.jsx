@@ -15,8 +15,18 @@ const Dashboard = () => {
   useEffect(() => {
     connectSocket();
 
+    let lastUpdateTime = 0;
     const handleUpdate = (data) => {
-      setAiData(data);
+      // Throttle dashboard re-renders to ~5fps (every 200ms) for UI state
+      // The WebcamFeed bypasses this and renders at full 30fps
+      const now = Date.now();
+      if (now - lastUpdateTime > 200) {
+        setAiData({
+          gestures: data.gestures || [],
+          latency: data.latency || '0ms'
+        });
+        lastUpdateTime = now;
+      }
     };
 
     socket.on('frontend_update', handleUpdate);
@@ -45,7 +55,7 @@ const Dashboard = () => {
 
       <div className="dashboard-main-grid">
         <div className="webcam-section">
-          <WebcamFeed frame={aiData.frame} />
+          <WebcamFeed />
         </div>
         <div className="gesture-section">
           <GestureStatus activeGestures={aiData.gestures} />
