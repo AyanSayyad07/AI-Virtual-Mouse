@@ -19,6 +19,7 @@ was_pinched = False
 prev_two_hand_dist = 0
 camera_active = True
 frameR = 100 # Bounding box reduction
+prev_scroll_y = 0
 
 custom_rules = {
     'thumbs_up': 'volumeup',
@@ -137,7 +138,7 @@ def main():
                         simulated_gestures.append("two_hands")
                         
                     for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
-                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched, frameR
+                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched, frameR, prev_scroll_y
                         # Draw landmarks on frame
                         mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                         lmList = hand_landmarks.landmark
@@ -230,8 +231,17 @@ def main():
                                 
                             if is_index_up and is_middle_up and not is_ring_up and not is_pinky_up:
                                 simulated_gestures.append("swipe")
-                                try: pyautogui.scroll(50)
-                                except: pass
+                                sy = np.interp(index_tip.y * h, [frameR, h - frameR], [0, screen_h])
+                                if prev_scroll_y != 0:
+                                    dy = prev_scroll_y - sy
+                                    if abs(dy) > 5:
+                                        try: pyautogui.scroll(int(dy * 2))
+                                        except: pass
+                                        prev_scroll_y = sy
+                                else:
+                                    prev_scroll_y = sy
+                            else:
+                                prev_scroll_y = 0
                                 
                             if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and pinch_ratio >= 0.45:
                                 simulated_gestures.append("drag")
