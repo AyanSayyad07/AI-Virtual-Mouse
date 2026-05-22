@@ -4,10 +4,10 @@ import './GestureStatus.css';
 
 const GestureStatus = ({ activeGestures = [] }) => {
   const gestures = [
-    { id: 'pinch', name: 'Left Click', icon: MousePointer2, active: activeGestures.includes('pinch'), key: 'Pinch' },
+    { id: 'pinch', name: 'Quick Click', icon: MousePointer2, active: activeGestures.includes('pinch'), key: 'Quick Pinch' },
+    { id: 'drag', name: 'Drag & Drop', icon: Hand, active: activeGestures.includes('drag'), key: 'Hold Pinch' },
     { id: 'two_hands', name: 'Dynamic Zoom', icon: ZoomIn, active: activeGestures.includes('two_hands'), key: 'Dual Pinch & Pull' },
     { id: 'swipe', name: 'Scroll', icon: Move, active: activeGestures.includes('swipe'), key: 'Two Fingers' },
-    { id: 'drag', name: 'Drag & Drop', icon: Hand, active: activeGestures.includes('drag'), key: 'Closed Fist' },
     { id: 'keyboard', name: 'Virtual Keyboard', icon: Type, active: activeGestures.includes('keyboard'), key: 'Three Fingers' },
   ];
 
