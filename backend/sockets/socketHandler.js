@@ -4,9 +4,13 @@ function setupSockets(io) {
 
     // Receive data stream from Python AI engine
     socket.on('ai_data_stream', (data) => {
-      // data should contain { frame: base64_string, gestures: array_of_active_gestures }
-      // Broadcast this data to all connected clients (React Frontend)
       socket.broadcast.emit('frontend_update', data);
+    });
+
+    // Receive custom gesture settings from Frontend and send to Python AI
+    socket.on('update_gesture_rules', (rules) => {
+      console.log('New gesture rules received:', rules);
+      socket.broadcast.emit('new_gesture_rules', rules);
     });
 
     socket.on('disconnect', () => {

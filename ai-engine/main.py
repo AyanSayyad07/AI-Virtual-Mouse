@@ -16,6 +16,13 @@ last_click_time = 0
 last_right_click_time = 0
 is_dragging = False
 
+custom_rules = {
+    'thumbs_up': 'volumeup',
+    'pinky_up': 'playpause',
+    'rock_sign': 'nexttrack'
+}
+last_action_time = {}
+
 # MediaPipe setup
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
@@ -36,6 +43,12 @@ def connect():
 @sio.event
 def disconnect():
     print("Disconnected from backend.")
+
+@sio.event
+def new_gesture_rules(data):
+    global custom_rules
+    print("Received new custom rules:", data)
+    custom_rules = data
 
 def get_distance(p1, p2, img_w, img_h):
     x1, y1 = int(p1.x * img_w), int(p1.y * img_h)
@@ -126,6 +139,29 @@ def main():
                         is_middle_up = middle_tip.y < middle_pip.y
                         is_ring_up = ring_tip.y < ring_pip.y
                         is_pinky_up = pinky_tip.y < pinky_pip.y
+                        is_thumb_up = thumb_tip.y < lmList[3].y
+                        
+                        # Custom Gestures
+                        is_thumbs_up = is_thumb_up and not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up
+                        is_pinky_only_up = is_pinky_up and not is_index_up and not is_middle_up and not is_ring_up and not is_thumb_up
+                        is_rock_sign = is_index_up and is_pinky_up and not is_middle_up and not is_ring_up and not is_thumb_up
+
+                        def execute_custom_action(gesture_name):
+                            global last_action_time, custom_rules
+                            action = custom_rules.get(gesture_name, 'none')
+                            if action != 'none':
+                                t = time.time()
+                                if t - last_action_time.get(action, 0) > 1.0: # 1 sec cooldown
+                                    try:
+                                        pyautogui.press(action)
+                                        last_action_time[action] = t
+                                        simulated_gestures.append(gesture_name)
+                                    except Exception:
+                                        pass
+
+                        if is_thumbs_up: execute_custom_action('thumbs_up')
+                        if is_pinky_only_up: execute_custom_action('pinky_up')
+                        if is_rock_sign: execute_custom_action('rock_sign')
                         
                         # Movement -> Only Index Finger Up
                         if is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:

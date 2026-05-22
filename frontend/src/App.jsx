@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar/Sidebar';
 import Navbar from './components/Navbar/Navbar';
 import Dashboard from './pages/Dashboard';
+import Settings from './pages/Settings';
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -24,7 +25,7 @@ function App() {
         <Navbar isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<div style={{padding: '2rem'}}>Settings Page Placeholder</div>} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/about" element={<div style={{padding: '2rem'}}>About Page Placeholder</div>} />
         </Routes>
       </div>
