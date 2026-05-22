@@ -13,6 +13,8 @@ smoothening = 5
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 last_click_time = 0
+last_right_click_time = 0
+is_dragging = False
 
 # MediaPipe setup
 mp_hands = mp.solutions.hands
@@ -105,8 +107,19 @@ def main():
                         ring_pip = lmList[14]
                         pinky_pip = lmList[18]
                         
-                        # Distance between thumb and index
+                        # Dynamic Depth Scaling: Calculate hand size (wrist to middle MCP)
+                        wrist = lmList[0]
+                        middle_mcp = lmList[9]
+                        hand_size = get_distance(wrist, middle_mcp, w, h)
+                        if hand_size == 0: hand_size = 1 # Prevent division by zero
+                        
+                        # Distance between thumb and fingers
                         pinch_dist = get_distance(thumb_tip, index_tip, w, h)
+                        right_pinch_dist = get_distance(thumb_tip, middle_tip, w, h)
+                        
+                        # Calculate Pinch Ratios (distance relative to hand size)
+                        pinch_ratio = pinch_dist / hand_size
+                        right_pinch_ratio = right_pinch_dist / hand_size
                         
                         # A finger is considered "up" if its tip is physically higher (lower y value) than its PIP joint
                         is_index_up = index_tip.y < index_pip.y
@@ -125,16 +138,17 @@ def main():
                             clocX = plocX + (x3 - plocX) / smoothening
                             clocY = plocY + (y3 - plocY) / smoothening
                             
-                            # Move Mouse
-                            try:
-                                pyautogui.moveTo(screen_w - clocX, clocY)
-                            except Exception as e:
-                                print(f"Mouse move error: {e}")
-                                
-                            plocX, plocY = clocX, clocY
+                            # Anti-Jitter Deadzone
+                            if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
+                                # Move Mouse
+                                try:
+                                    pyautogui.moveTo(screen_w - clocX, clocY)
+                                except Exception as e:
+                                    pass
+                                plocX, plocY = clocX, clocY
 
                         # Left Click -> Pinch (Thumb and Index close)
-                        if pinch_dist < 40:
+                        if pinch_ratio < 0.4:
                             simulated_gestures.append("pinch")
                             global last_click_time
                             if time.time() - last_click_time > 0.5:
@@ -142,7 +156,18 @@ def main():
                                     pyautogui.click()
                                     last_click_time = time.time()
                                 except Exception as e:
-                                    print(f"Mouse click error: {e}")
+                                    pass
+                                    
+                        # Right Click -> Pinch (Thumb and Middle close)
+                        if right_pinch_ratio < 0.4 and not (pinch_ratio < 0.4):
+                            simulated_gestures.append("pinch") # UI doesn't have right click icon yet
+                            global last_right_click_time
+                            if time.time() - last_right_click_time > 0.5:
+                                try:
+                                    pyautogui.click(button='right')
+                                    last_right_click_time = time.time()
+                                except Exception as e:
+                                    pass
                             
                         # Scroll -> Two Fingers Up (Index & Middle)
                         if is_index_up and is_middle_up and not is_ring_up and not is_pinky_up:
@@ -153,8 +178,23 @@ def main():
                                 pass
                             
                         # Drag & Drop -> Closed Fist (All fingers down)
+                        global is_dragging
                         if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up:
                             simulated_gestures.append("drag")
+                            if not is_dragging:
+                                try:
+                                    pyautogui.mouseDown()
+                                    is_dragging = True
+                                except Exception:
+                                    pass
+                        else:
+                            # If hand opens, release the drag
+                            if is_dragging:
+                                try:
+                                    pyautogui.mouseUp()
+                                    is_dragging = False
+                                except Exception:
+                                    pass
                             
                         # Virtual Keyboard -> Three Fingers Up
                         if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
