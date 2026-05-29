@@ -2,26 +2,23 @@ import { useEffect, useState } from 'react';
 import WebcamFeed from '../components/WebcamFeed/WebcamFeed';
 import GestureStatus from '../components/GestureStatus/GestureStatus';
 import Analytics from '../components/Analytics/Analytics';
-import { socket, connectSocket, disconnectSocket } from '../services/socketService';
+import { socket } from '../services/socketService';
 import './Dashboard.css';
 
-const Dashboard = () => {
+const Dashboard = ({ isCameraActive, setIsCameraActive, sessionTime }) => {
   const [aiData, setAiData] = useState({
     frame: null,
     gestures: [],
     latency: '0ms'
   });
-  const [cameraActive, setCameraActive] = useState(true);
 
   const toggleCamera = () => {
-    const newState = !cameraActive;
-    setCameraActive(newState);
+    const newState = !isCameraActive;
+    setIsCameraActive(newState);
     socket.emit('toggle_camera', newState);
   };
 
   useEffect(() => {
-    connectSocket();
-
     let lastUpdateTime = 0;
     const handleUpdate = (data) => {
       // Throttle dashboard re-renders to ~5fps (every 200ms) for UI state
@@ -40,12 +37,11 @@ const Dashboard = () => {
 
     return () => {
       socket.off('frontend_update', handleUpdate);
-      disconnectSocket();
     };
   }, []);
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-container page-transition">
       <div className="dashboard-header">
         <div>
           <h1>Dashboard</h1>
@@ -53,16 +49,16 @@ const Dashboard = () => {
         </div>
         <div className="header-actions">
           <button 
-            className={`primary-btn ${!cameraActive ? 'danger' : ''}`}
+            className={`primary-btn ${!isCameraActive ? 'danger' : ''}`}
             onClick={toggleCamera}
-            style={{ backgroundColor: !cameraActive ? '#ef4444' : '' }}
+            style={{ backgroundColor: !isCameraActive ? '#ef4444' : '' }}
           >
-            {cameraActive ? 'Turn Camera Off' : 'Turn Camera On'}
+            {isCameraActive ? 'Turn Camera Off' : 'Turn Camera On'}
           </button>
         </div>
       </div>
 
-      <Analytics latency={aiData.latency} />
+      <Analytics latency={aiData.latency} cameraActive={isCameraActive} sessionTime={sessionTime} />
 
       <div className="dashboard-main-grid">
         <div className="webcam-section">

@@ -1,15 +1,24 @@
 
-import { Bell, Search, User, Sun, Moon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, User, Sun, Moon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './Navbar.css';
 
 const Navbar = ({ isDarkMode, toggleTheme }) => {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Failed to parse user session");
+      }
+    }
+  }, []);
   return (
     <header className="navbar">
-      <div className="navbar-search">
-        <Search size={18} className="text-muted" />
-        <input type="text" placeholder="Search commands or settings..." />
-      </div>
-
       <div className="navbar-actions">
         <button className="icon-button" onClick={toggleTheme}>
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
@@ -18,12 +27,16 @@ const Navbar = ({ isDarkMode, toggleTheme }) => {
           <Bell size={20} />
           <span className="notification-badge"></span>
         </button>
-        <div className="user-profile">
-          <div className="avatar">
-            <User size={18} />
+        <Link to="/profile" className="user-profile" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="avatar" style={{ overflow: 'hidden' }}>
+            {user && user.profilePicture ? (
+              <img src={user.profilePicture} alt="User Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <User size={18} />
+            )}
           </div>
-          <span className="text-sm font-medium">Developer</span>
-        </div>
+          <span className="text-sm font-medium">{user ? user.name : "Developer"}</span>
+        </Link>
       </div>
     </header>
   );

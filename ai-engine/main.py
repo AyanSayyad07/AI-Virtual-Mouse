@@ -8,16 +8,16 @@ import mediapipe as mp
 import pyautogui
 
 pyautogui.FAILSAFE = False # Disable for VM environments, enable for real use
+pyautogui.PAUSE = 0 # Disable default 0.1s pause after every pyautogui call to fix mouse lag
 screen_w, screen_h = pyautogui.size()
 smoothening = 5
 plocX, plocY = 0, 0
 clocX, clocY = 0, 0
 last_click_time = 0
 last_right_click_time = 0
-is_dragging = False
 was_pinched = False
 prev_two_hand_dist = 0
-camera_active = True
+camera_active = False
 frameR = 100 # Bounding box reduction
 prev_scroll_y = 0
 
@@ -74,8 +74,10 @@ def main():
         print(f"Failed to connect to backend: {e}")
         return
 
-    # Initialize Webcam
-    cap = cv2.VideoCapture(0)
+    # Initialize Webcam with DirectShow for instant startup on Windows
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     use_synthetic = False
     
     if not cap.isOpened():
@@ -91,7 +93,7 @@ def main():
                 if cap is not None and cap.isOpened():
                     cap.release()
                     cap = None
-                time.sleep(0.5)
+                time.sleep(0.1)
                 # Emit empty payload to clear UI
                 sio.emit('ai_data_stream', {
                     'frame': None,
@@ -101,7 +103,9 @@ def main():
                 continue
                 
             if cap is None:
-                cap = cv2.VideoCapture(0)
+                cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                 if not cap.isOpened():
                     use_synthetic = True
 
@@ -138,7 +142,7 @@ def main():
                         simulated_gestures.append("two_hands")
                         
                     for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
-                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, is_dragging, was_pinched, frameR, prev_scroll_y
+                        global plocX, plocY, clocX, clocY, last_click_time, last_right_click_time, was_pinched, frameR, prev_scroll_y
                         # Draw landmarks on frame
                         mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                         lmList = hand_landmarks.landmark
@@ -200,14 +204,14 @@ def main():
                             
                             # Movement tracks the Index Finger Tip
                             # Freeze movement while clicking (Stabilizer: pinch_ratio < 0.45)
-                            is_movement_mode = (is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up) or is_dragging
+                            is_movement_mode = (is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up)
                             if is_movement_mode and pinch_ratio >= 0.45:
                                 x3 = np.interp(index_tip.x * w, [frameR, w - frameR], [0, screen_w])
                                 y3 = np.interp(index_tip.y * h, [frameR, h - frameR], [0, screen_h])
                                 clocX = plocX + (x3 - plocX) / smoothening
                                 clocY = plocY + (y3 - plocY) / smoothening
                                 if abs(clocX - plocX) > 3 or abs(clocY - plocY) > 3:
-                                    try: pyautogui.moveTo(screen_w - clocX, clocY)
+                                    try: pyautogui.moveTo(clocX, clocY)
                                     except Exception: pass
                                     plocX, plocY = clocX, clocY
 
@@ -215,7 +219,7 @@ def main():
                                 simulated_gestures.append("pinch")
                                 if not was_pinched:
                                     try:
-                                        pyautogui.click()
+                                        pyautogui.click(button='right')
                                         was_pinched = True
                                     except Exception: pass
                             else:
@@ -225,7 +229,7 @@ def main():
                                 simulated_gestures.append("pinch")
                                 if time.time() - last_right_click_time > 0.5:
                                     try:
-                                        pyautogui.click(button='right')
+                                        pyautogui.click()
                                         last_right_click_time = time.time()
                                     except Exception: pass
                                 
@@ -242,20 +246,6 @@ def main():
                                     prev_scroll_y = sy
                             else:
                                 prev_scroll_y = 0
-                                
-                            if not is_index_up and not is_middle_up and not is_ring_up and not is_pinky_up and pinch_ratio >= 0.45:
-                                simulated_gestures.append("drag")
-                                if not is_dragging:
-                                    try:
-                                        pyautogui.mouseDown()
-                                        is_dragging = True
-                                    except Exception: pass
-                            else:
-                                if is_dragging:
-                                    try:
-                                        pyautogui.mouseUp()
-                                        is_dragging = False
-                                    except Exception: pass
                                 
                             if is_index_up and is_middle_up and is_ring_up and not is_pinky_up:
                                 simulated_gestures.append("keyboard")
@@ -283,9 +273,10 @@ def main():
                     else:
                         prev_two_hand_dist = 0
 
-            # Compress image to JPEG to send over websocket
-            img_small = cv2.resize(img, (640, 480))
-            _, buffer = cv2.imencode('.jpg', img_small, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            # Compress image to JPEG to send over websocket.
+            # Downscaling to 480x360 and reducing quality drastically lowers encoding time and network payload.
+            img_small = cv2.resize(img, (480, 360))
+            _, buffer = cv2.imencode('.jpg', img_small, [cv2.IMWRITE_JPEG_QUALITY, 45])
             frame_base64 = base64.b64encode(buffer).decode('utf-8')
 
             # Prepare data payload
@@ -298,15 +289,20 @@ def main():
             # Emit to backend
             sio.emit('ai_data_stream', payload)
 
-            # Cap frame rate slightly to avoid overwhelming the socket (approx 30fps)
-            time.sleep(0.03)
+            # Cap frame rate slightly to avoid overwhelming the socket if using synthetic stream
+            if use_synthetic:
+                time.sleep(0.03)
+            # We don't sleep for real webcam because cap.read() automatically blocks to match hardware framerate
 
     except KeyboardInterrupt:
         print("Stopping AI engine...")
     finally:
-        if not use_synthetic:
+        if not use_synthetic and 'cap' in locals() and cap is not None:
             cap.release()
-        sio.disconnect()
+        try:
+            sio.disconnect()
+        except Exception:
+            pass
 
 if __name__ == '__main__':
     main()

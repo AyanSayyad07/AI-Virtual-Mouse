@@ -1,6 +1,10 @@
 .settings-page {
   padding: 2rem;
-  animation: fadeIn 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .settings-page h2 {

@@ -49,3 +49,10 @@
   background-color: color-mix(in srgb, var(--secondary-accent) 10%, transparent);
   color: var(--secondary-accent);
 }
+
+@media (max-width: 768px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}

@@ -54,17 +54,21 @@
 
 /* Active State */
 .gesture-item.active {
-  border-color: color-mix(in srgb, var(--primary-accent) 40%, transparent);
-  background-color: color-mix(in srgb, var(--primary-accent) 5%, transparent);
+  border-color: var(--primary-accent);
+  background-color: color-mix(in srgb, var(--primary-accent) 10%, transparent);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-accent) 15%, transparent);
 }
 
 .gesture-item.active .gesture-icon-wrapper {
   background-color: var(--primary-accent);
   color: #fff;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-accent) 40%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--primary-accent) 60%, transparent);
+  transform: scale(1.1);
 }
 
 .gesture-item.active .status-indicator-dot {
   background-color: var(--primary-accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--primary-accent) 60%, transparent);
+  box-shadow: 0 0 12px var(--primary-accent);
+  transform: scale(1.5);
 }

@@ -32,7 +32,7 @@ const Settings = () => {
   };
 
   return (
-    <div className="settings-page">
+    <div className="settings-page page-transition">
       <h2>Custom Gesture Engine</h2>
       <p className="settings-desc">Map physical hand gestures to operating system commands. These rules will be applied in real-time to the AI engine.</p>
       
